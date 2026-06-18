@@ -1,0 +1,15 @@
+.next/
+node_modules/
+
+*.log
+.env
+.env.*
+!.env.example
+
+dist/
+build/
+coverage/
+work/
+
+Thumbs.db
+.DS_Store
