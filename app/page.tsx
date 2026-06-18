@@ -24,7 +24,7 @@ import { RUBRIC_DIMENSIONS, TASK_LEVELS } from "@/types/workbench";
 const navItems: Array<{ key: NavKey; label: string; helper: string }> = [
   { key: "ai-workbench", label: "AI 生成实训", helper: "课程资料与岗位标准" },
   { key: "rubric", label: "评分量规", helper: "教师编辑与本地发布" },
-  { key: "submissions", label: "学生提交", helper: "后续切片接入" },
+  { key: "submissions", label: "学生提交", helper: "身份推荐与作业提交" },
   { key: "results", label: "评分结果", helper: "AI 反馈与教师复核" },
   { key: "class-dashboard", label: "班级看板", helper: "能力均值与薄弱项" },
 ];
@@ -110,7 +110,15 @@ function formatDateTime(value: string) {
 function hasFullTaskSet(tasks: TrainingTask[]) {
   return (
     tasks.length === TASK_LEVELS.length &&
-    tasks.every((task) => task.rubric.length === RUBRIC_DIMENSIONS.length)
+    tasks.every(
+      (task) =>
+        task.title.trim() &&
+        task.objective.trim() &&
+        task.description.trim() &&
+        task.submissionRequirements.trim() &&
+        task.evaluationFocus.trim() &&
+        task.rubric.length === RUBRIC_DIMENSIONS.length,
+    )
   );
 }
 
@@ -143,6 +151,16 @@ function getDraftPublicationPatch(state: WorkbenchState) {
 
 function getScoreTotal(record: ScoreRecord, review: TeacherReview | null) {
   return review?.totalScore ?? record.result.totalScore;
+}
+
+function resetDownstreamState() {
+  return {
+    selectedSubmissionTaskLevel: null,
+    studentSubmissions: [],
+    scoreRecords: [],
+    teacherReviews: [],
+    selectedScoreRecordId: null,
+  };
 }
 
 function readApiErrorMessage(value: unknown, fallback: string) {
@@ -260,8 +278,9 @@ export default function Home() {
 
       return {
         ...current,
-        selectedStudentId: studentId,
+        selectedStudentId: nextStudent?.id ?? current.selectedStudentId,
         selectedSubmissionTaskLevel: nextLevel,
+        selectedScoreRecordId: null,
         draftInputs: {
           ...current.draftInputs,
           studentSubmission:
@@ -285,7 +304,10 @@ export default function Home() {
       trainingTasks: sampleTrainingTasks,
       tasksPublished: false,
       publishedAt: null,
+      ...resetDownstreamState(),
     }));
+    setScoringError("");
+    setReviewDraft(null);
   }
 
   function loadFullDemoChain() {
@@ -634,6 +656,15 @@ export default function Home() {
     setReviewDraft(nextReview);
   }
 
+  function selectScoreRecord(record: ScoreRecord) {
+    setState((current) => ({
+      ...current,
+      selectedStudentId: record.studentId,
+      selectedSubmissionTaskLevel: record.taskLevel,
+      selectedScoreRecordId: record.id,
+    }));
+  }
+
   async function generateTrainingTasks() {
     const courseMaterial = state.draftInputs.courseMaterial.trim();
     const jobStandard = state.draftInputs.jobStandard.trim();
@@ -668,7 +699,10 @@ export default function Home() {
         trainingTasks: tasks,
         tasksPublished: false,
         publishedAt: null,
+        ...resetDownstreamState(),
       }));
+      setScoringError("");
+      setReviewDraft(null);
     } catch (error) {
       setGenerationError(
         error instanceof Error ? error.message : "生成分层任务失败，请稍后重试。",
@@ -1269,6 +1303,53 @@ export default function Home() {
     );
   }
 
+  function renderTeacherScoreRecordList() {
+    if (!isTeacher || state.scoreRecords.length === 0) {
+      return null;
+    }
+
+    const reviewedByScoreId = new Set(
+      state.teacherReviews.map((review) => review.scoreRecordId),
+    );
+    const sortedRecords = [...state.scoreRecords].sort(
+      (a, b) =>
+        new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime() ||
+        b.attemptNumber - a.attemptNumber,
+    );
+
+    return (
+      <article className="score-result-card review-record-list">
+        <div className="section-title compact">
+          <h4>已评分提交</h4>
+          <span>选择学生与任务进入复核</span>
+        </div>
+        <div className="review-record-list-grid">
+          {sortedRecords.map((record) => {
+            const student = state.students.find((item) => item.id === record.studentId);
+            const task = state.trainingTasks.find((item) => item.level === record.taskLevel);
+            const isActive = currentScoreRecord?.id === record.id;
+            const reviewed = reviewedByScoreId.has(record.id);
+
+            return (
+              <button
+                className={isActive ? "review-record-item active" : "review-record-item"}
+                key={record.id}
+                onClick={() => selectScoreRecord(record)}
+                type="button"
+              >
+                <span>{reviewed ? "已复核" : "待复核"}</span>
+                <strong>
+                  {student?.name ?? record.studentId} · {record.taskLevel}
+                </strong>
+                <small>{task?.title ?? "当前任务"} · {record.result.totalScore} 分</small>
+              </button>
+            );
+          })}
+        </div>
+      </article>
+    );
+  }
+
   function renderScoreResultsPage() {
     if (!currentScoreRecord) {
       return (
@@ -1278,6 +1359,7 @@ export default function Home() {
             <span>等待学生评分</span>
           </div>
           <p>当前学生和任务还没有评分记录。请先在学生提交页保存作业并触发 AI 评分，或加载示例评分。</p>
+          {renderTeacherScoreRecordList()}
         </section>
       );
     }
@@ -1288,6 +1370,7 @@ export default function Home() {
           <h3>评分结果</h3>
           <span>{selectedStudent?.name ?? "当前学生"} · {selectedSubmissionTask?.level ?? "任务"}</span>
         </div>
+        {renderTeacherScoreRecordList()}
         {renderScoreResult(currentScoreRecord, previousScoreRecord)}
         {isTeacher ? renderTeacherReviewPanel(currentScoreRecord) : null}
       </section>
@@ -1633,7 +1716,7 @@ export default function Home() {
               <span>当前示例学生</span>
               <strong>{selectedStudent?.name ?? "未选择学生"}</strong>
               <p>
-                学生提交会保存到当前浏览器本地状态；AI 评分、教师复核和班级看板将在后续切片接入。
+                学生提交、AI/示例评分、教师复核和班级看板都会保存到当前浏览器本地状态。
               </p>
             </div>
 

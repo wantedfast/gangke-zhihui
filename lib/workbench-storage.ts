@@ -94,17 +94,28 @@ function normalizeTrainingTask(value: unknown): TrainingTask | null {
   }
 
   const title = readString(value.title);
-  if (!title) {
+  const objective = readString(value.objective);
+  const description = readString(value.description);
+  const submissionRequirements = readString(value.submissionRequirements);
+  const evaluationFocus = readString(value.evaluationFocus);
+
+  if (
+    !title ||
+    !objective ||
+    !description ||
+    !submissionRequirements ||
+    !evaluationFocus
+  ) {
     return null;
   }
 
   return {
     level: level as TrainingTask["level"],
     title,
-    objective: readString(value.objective),
-    description: readString(value.description),
-    submissionRequirements: readString(value.submissionRequirements),
-    evaluationFocus: readString(value.evaluationFocus),
+    objective,
+    description,
+    submissionRequirements,
+    evaluationFocus,
     rubric: normalizeRubric(value.rubric),
   };
 }
@@ -250,9 +261,9 @@ function normalizeScoreRecords(value: unknown): ScoreRecord[] {
     }
 
     const dimensions = normalizeScoreDimensions(item.result.dimensions);
-    const totalScore = Math.max(
+    const totalScore = dimensions.reduce(
+      (sum, dimension) => sum + dimension.score,
       0,
-      Math.min(100, Math.round(readNumber(item.result.totalScore, dimensions.reduce((sum, dimension) => sum + dimension.score, 0)))),
     );
 
     return [
@@ -330,6 +341,11 @@ function normalizeWorkbenchState(parsed: Partial<WorkbenchState>): WorkbenchStat
     : null;
   const scoreRecords = normalizeScoreRecords(parsed.scoreRecords);
   const teacherReviews = normalizeTeacherReviews(parsed.teacherReviews);
+  const selectedStudentId = students.some(
+    (student) => student.id === readString(parsed.selectedStudentId),
+  )
+    ? readString(parsed.selectedStudentId)
+    : students[0]?.id ?? defaultWorkbenchState.selectedStudentId;
   const selectedScoreRecordId = scoreRecords.some(
     (record) => record.id === readString(parsed.selectedScoreRecordId),
   )
@@ -340,8 +356,7 @@ function normalizeWorkbenchState(parsed: Partial<WorkbenchState>): WorkbenchStat
     ...defaultWorkbenchState,
     ...parsed,
     students,
-    selectedStudentId:
-      readString(parsed.selectedStudentId) || defaultWorkbenchState.selectedStudentId,
+    selectedStudentId,
     selectedSubmissionTaskLevel,
     trainingTasks,
     tasksPublished,

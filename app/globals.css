@@ -1080,6 +1080,44 @@ textarea:disabled {
   gap: 8px;
 }
 
+.review-record-list {
+  margin-bottom: 16px;
+}
+
+.review-record-list-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.review-record-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid oklch(0.86 0.04 235 / 78%);
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.review-record-item.active {
+  border-color: oklch(0.62 0.16 235 / 86%);
+  background: oklch(0.92 0.05 235 / 66%);
+}
+
+.review-record-item span {
+  color: var(--brand-deep);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.review-record-item small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .muted-note {
   margin: 0;
   color: var(--muted);
