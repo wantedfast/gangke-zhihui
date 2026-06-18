@@ -1,6 +1,10 @@
 import type {
   RubricDimension,
   RubricItem,
+  ScoreRecord,
+  ScoreResult,
+  Student,
+  StudentSubmission,
   TrainingTask,
   WorkbenchState,
 } from "@/types/workbench";
@@ -167,6 +171,64 @@ export const sampleTrainingTasks: TrainingTask[] = [
   },
 ];
 
+export function createExampleScoreResult(task: TrainingTask): ScoreResult {
+  const dimensionScores = [16, 21, 20, 16, 8];
+
+  const dimensions = task.rubric.map((item, index) => ({
+    dimension: item.dimension,
+    maxScore: item.score,
+    score: Math.min(item.score, dimensionScores[index] ?? Math.round(item.score * 0.8)),
+    deductionReason:
+      index === 0
+        ? "需求边界和验收标准还可以更具体。"
+        : index === 1
+          ? "应用流程较完整，但异常处理说明略少。"
+          : index === 2
+            ? "接口输入输出有描述，缺少失败重试和日志细节。"
+            : index === 3
+              ? "测试样例覆盖基础路径，调优策略还不够量化。"
+              : "已识别主要风险，但文档表达还可以更结构化。",
+    suggestion:
+      index === 0
+        ? "补充目标用户、边界条件和可验收指标。"
+        : index === 1
+          ? "增加反馈闭环、兜底流程和异常输入处理。"
+          : index === 2
+            ? "写清请求字段、响应解析、超时重试和日志留存。"
+            : index === 3
+              ? "用多组测试问题记录准确性、完整性和改进动作。"
+              : "补充敏感信息处理、人工兜底和文档复现步骤。",
+  }));
+
+  return {
+    totalScore: dimensions.reduce((sum, item) => sum + item.score, 0),
+    dimensions,
+    summary:
+      "整体方案已经覆盖主要实训要求，能够说明业务场景、AI 应用流程和基本测试思路。下一步应加强接口工程细节、量化评估与安全合规表达。",
+  };
+}
+
+export function createExampleScoreRecord(
+  student: Student,
+  task: TrainingTask,
+  submission: StudentSubmission,
+  attemptNumber: number,
+): ScoreRecord {
+  const scoredAt = new Date().toISOString();
+
+  return {
+    id: `${submission.id}-example-score-${attemptNumber}-${Date.now()}`,
+    studentId: student.id,
+    taskLevel: task.level,
+    submissionId: submission.id,
+    submissionContent: submission.content,
+    attemptNumber,
+    scoredAt,
+    source: "example",
+    result: createExampleScoreResult(task),
+  };
+}
+
 export const defaultWorkbenchState: WorkbenchState = {
   perspective: "teacher",
   activeNav: "ai-workbench",
@@ -185,6 +247,9 @@ export const defaultWorkbenchState: WorkbenchState = {
   tasksPublished: false,
   publishedAt: null,
   studentSubmissions: [],
+  scoreRecords: [],
+  teacherReviews: [],
+  selectedScoreRecordId: null,
   draftInputs: {
     courseMaterial:
       "课程围绕大模型应用开发，训练学生完成需求分析、提示词设计、模型接口调用、效果评估与调优，以及安全合规说明。",

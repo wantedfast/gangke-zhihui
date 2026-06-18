@@ -877,8 +877,340 @@ textarea:disabled {
   line-height: 1.7;
 }
 
+.score-action-panel,
+.score-result-card,
+.score-summary {
+  padding: 18px;
+  border: 1px solid oklch(0.86 0.04 235 / 78%);
+  border-radius: 18px;
+  background: var(--surface-strong);
+}
+
+.score-action-panel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.score-action-panel h4,
+.score-result-header h4 {
+  margin: 0 0 8px;
+  color: var(--brand-deep);
+  font-size: 26px;
+}
+
+.score-action-panel p,
+.score-result-header p,
+.score-summary p,
+.score-dimension-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.score-change-note {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border: 1px dashed oklch(0.72 0.04 235 / 58%);
+  border-radius: 12px;
+  background: oklch(1 0 0 / 44%);
+}
+
+.score-change-note.wide {
+  margin-top: 2px;
+}
+
+.score-change-note span {
+  color: var(--brand-deep);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.score-result-card {
+  display: grid;
+  gap: 16px;
+}
+
+.score-result-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.delta-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: var(--brand-deep);
+  background: oklch(0.91 0.05 220 / 58%);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.delta-badge.up {
+  color: var(--success-ink);
+  background: var(--success-bg);
+}
+
+.delta-badge.down {
+  color: oklch(0.42 0.11 28);
+  background: oklch(0.96 0.04 32 / 76%);
+}
+
+.score-dimension-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.score-dimension-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid oklch(0.86 0.04 235 / 78%);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.score-dimension-title {
+  display: grid;
+  gap: 6px;
+}
+
+.score-dimension-title strong,
+.score-summary strong,
+.score-dimension-card b {
+  color: var(--brand-deep);
+}
+
+.score-dimension-title span {
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 850;
+}
+
+.teacher-review-panel {
+  margin-top: 16px;
+}
+
+.review-context-grid,
+.review-saved-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.review-context-grid > div,
+.review-saved-grid > div {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid oklch(0.86 0.04 235 / 78%);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.review-context-grid span,
+.review-saved-grid span,
+.review-summary-editor span,
+.review-dimension-editor label span {
+  color: var(--brand-deep);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.review-context-grid strong,
+.review-saved-grid strong {
+  color: var(--ink);
+}
+
+.review-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.review-dimension-editor {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid oklch(0.86 0.04 235 / 78%);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.review-dimension-editor label {
+  display: grid;
+  grid-template-columns: 1fr 72px auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-dimension-editor input,
+.review-dimension-editor textarea,
+.review-summary-editor textarea {
+  width: 100%;
+  border: 1px solid oklch(0.82 0.04 235 / 86%);
+  border-radius: 12px;
+  color: var(--ink);
+  background: oklch(1 0 0 / 68%);
+  font: inherit;
+}
+
+.review-dimension-editor input {
+  min-height: 36px;
+  padding: 0 8px;
+}
+
+.review-dimension-editor textarea,
+.review-summary-editor textarea {
+  resize: vertical;
+  padding: 10px;
+  line-height: 1.55;
+}
+
+.review-summary-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.muted-note {
+  margin: 0;
+  color: var(--muted);
+}
+
+.class-dashboard-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.dashboard-metrics,
+.dashboard-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-grid {
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+}
+
+.dashboard-metrics > div {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid oklch(0.86 0.04 235 / 78%);
+  border-radius: 16px;
+  background: var(--surface-strong);
+}
+
+.dashboard-metrics span,
+.ability-row span,
+.dashboard-table span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.dashboard-metrics strong {
+  color: var(--brand-deep);
+  font-size: 28px;
+}
+
+.section-title.compact h4 {
+  margin: 0;
+  color: var(--brand-deep);
+  font-size: 20px;
+}
+
+.ability-bars {
+  display: grid;
+  gap: 14px;
+}
+
+.ability-row {
+  display: grid;
+  gap: 8px;
+}
+
+.ability-row > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ability-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: oklch(0.91 0.04 235 / 64%);
+}
+
+.ability-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--brand-deep));
+}
+
+.dashboard-advice {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.dashboard-table-wrap {
+  overflow-x: auto;
+  border: 1px solid oklch(0.86 0.04 235 / 78%);
+  border-radius: 18px;
+  background: var(--surface-strong);
+}
+
+.dashboard-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+}
+
+.dashboard-table th,
+.dashboard-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid oklch(0.88 0.03 235 / 70%);
+  text-align: left;
+  vertical-align: top;
+}
+
+.dashboard-table th {
+  color: var(--brand-deep);
+  font-size: 13px;
+}
+
+.dashboard-table td {
+  color: var(--ink);
+}
+
+.dashboard-table td:first-child,
+.dashboard-table td:nth-child(2) {
+  display: grid;
+  gap: 4px;
+}
+
 @media (max-width: 1120px) {
   .task-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .score-dimension-grid,
+  .review-editor-grid,
+  .review-context-grid,
+  .review-saved-grid,
+  .dashboard-metrics,
+  .dashboard-grid {
     grid-template-columns: 1fr;
   }
 

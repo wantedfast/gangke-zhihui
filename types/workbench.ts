@@ -71,6 +71,43 @@ export type StudentSubmission = {
   submittedAt: string;
 };
 
+export type ScoreDimensionResult = {
+  dimension: RubricDimension;
+  maxScore: number;
+  score: number;
+  deductionReason: string;
+  suggestion: string;
+};
+
+export type ScoreResult = {
+  totalScore: number;
+  dimensions: ScoreDimensionResult[];
+  summary: string;
+};
+
+export type ScoreRecord = {
+  id: string;
+  studentId: string;
+  taskLevel: TrainingTaskLevel;
+  submissionId: string;
+  submissionContent: string;
+  attemptNumber: number;
+  scoredAt: string;
+  source: "ai" | "example";
+  result: ScoreResult;
+};
+
+export type TeacherReview = {
+  id: string;
+  scoreRecordId: string;
+  studentId: string;
+  taskLevel: TrainingTaskLevel;
+  reviewedAt: string;
+  dimensions: ScoreDimensionResult[];
+  totalScore: number;
+  summary: string;
+};
+
 export type WorkbenchState = {
   perspective: Perspective;
   activeNav: NavKey;
@@ -83,6 +120,9 @@ export type WorkbenchState = {
   tasksPublished: boolean;
   publishedAt: string | null;
   studentSubmissions: StudentSubmission[];
+  scoreRecords: ScoreRecord[];
+  teacherReviews: TeacherReview[];
+  selectedScoreRecordId: string | null;
   draftInputs: {
     courseMaterial: string;
     jobStandard: string;

@@ -2,8 +2,11 @@ import { defaultWorkbenchState } from "@/lib/sample-data";
 import type {
   RubricDimension,
   RubricItem,
+  ScoreDimensionResult,
+  ScoreRecord,
   Student,
   StudentSubmission,
+  TeacherReview,
   TrainingTask,
   WorkbenchState,
 } from "@/types/workbench";
@@ -190,6 +193,130 @@ function normalizeStudentSubmissions(value: unknown): StudentSubmission[] {
   });
 }
 
+function readNumber(value: unknown, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeScoreDimension(
+  value: unknown,
+  dimension: RubricDimension,
+): ScoreDimensionResult {
+  const maxScore = RUBRIC_DIMENSION_SCORE_MAP[dimension];
+  const record = isRecord(value) ? value : {};
+  const rawScore = readNumber(record.score, 0);
+
+  return {
+    dimension,
+    maxScore,
+    score: Math.max(0, Math.min(maxScore, Math.round(rawScore))),
+    deductionReason: readString(record.deductionReason),
+    suggestion: readString(record.suggestion),
+  };
+}
+
+function normalizeScoreDimensions(value: unknown): ScoreDimensionResult[] {
+  const rawDimensions = Array.isArray(value) ? value : [];
+
+  return RUBRIC_DIMENSIONS.map(({ dimension }) => {
+    const matched = rawDimensions.find(
+      (item) => normalizeRubricDimension(isRecord(item) ? item.dimension : undefined) === dimension,
+    );
+    return normalizeScoreDimension(matched, dimension);
+  });
+}
+
+function normalizeScoreRecords(value: unknown): ScoreRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    if (!isRecord(item) || !isRecord(item.result)) {
+      return [];
+    }
+
+    const studentId = readString(item.studentId);
+    const taskLevel = readString(item.taskLevel);
+    const submissionContent = readRawString(item.submissionContent);
+    const scoredAt = readString(item.scoredAt);
+
+    if (
+      !studentId ||
+      !TASK_LEVELS.includes(taskLevel as (typeof TASK_LEVELS)[number]) ||
+      !submissionContent.trim() ||
+      !scoredAt
+    ) {
+      return [];
+    }
+
+    const dimensions = normalizeScoreDimensions(item.result.dimensions);
+    const totalScore = Math.max(
+      0,
+      Math.min(100, Math.round(readNumber(item.result.totalScore, dimensions.reduce((sum, dimension) => sum + dimension.score, 0)))),
+    );
+
+    return [
+      {
+        id: readString(item.id) || `${studentId}-${taskLevel}-${scoredAt}`,
+        studentId,
+        taskLevel: taskLevel as TrainingTask["level"],
+        submissionId: readString(item.submissionId) || `${studentId}-${taskLevel}`,
+        submissionContent,
+        attemptNumber: Math.max(1, Math.round(readNumber(item.attemptNumber, 1))),
+        scoredAt,
+        source: item.source === "ai" ? "ai" : "example",
+        result: {
+          totalScore,
+          dimensions,
+          summary: readString(item.result.summary),
+        },
+      },
+    ];
+  });
+}
+
+function normalizeTeacherReviews(value: unknown): TeacherReview[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    if (!isRecord(item)) {
+      return [];
+    }
+
+    const studentId = readString(item.studentId);
+    const taskLevel = readString(item.taskLevel);
+    const scoreRecordId = readString(item.scoreRecordId);
+    const reviewedAt = readString(item.reviewedAt);
+
+    if (
+      !studentId ||
+      !scoreRecordId ||
+      !reviewedAt ||
+      !TASK_LEVELS.includes(taskLevel as (typeof TASK_LEVELS)[number])
+    ) {
+      return [];
+    }
+
+    const dimensions = normalizeScoreDimensions(item.dimensions);
+    const totalScore = dimensions.reduce((sum, dimension) => sum + dimension.score, 0);
+
+    return [
+      {
+        id: readString(item.id) || `${scoreRecordId}-review`,
+        scoreRecordId,
+        studentId,
+        taskLevel: taskLevel as TrainingTask["level"],
+        reviewedAt,
+        dimensions,
+        totalScore,
+        summary: readString(item.summary),
+      },
+    ];
+  });
+}
+
 function normalizeWorkbenchState(parsed: Partial<WorkbenchState>): WorkbenchState {
   const trainingTasks = normalizeTrainingTasks(parsed.trainingTasks);
   const students = normalizeStudents(parsed.students);
@@ -201,6 +328,13 @@ function normalizeWorkbenchState(parsed: Partial<WorkbenchState>): WorkbenchStat
   )
     ? (readString(parsed.selectedSubmissionTaskLevel) as TrainingTask["level"])
     : null;
+  const scoreRecords = normalizeScoreRecords(parsed.scoreRecords);
+  const teacherReviews = normalizeTeacherReviews(parsed.teacherReviews);
+  const selectedScoreRecordId = scoreRecords.some(
+    (record) => record.id === readString(parsed.selectedScoreRecordId),
+  )
+    ? readString(parsed.selectedScoreRecordId)
+    : scoreRecords[scoreRecords.length - 1]?.id ?? null;
 
   return {
     ...defaultWorkbenchState,
@@ -213,6 +347,9 @@ function normalizeWorkbenchState(parsed: Partial<WorkbenchState>): WorkbenchStat
     tasksPublished,
     publishedAt,
     studentSubmissions: normalizeStudentSubmissions(parsed.studentSubmissions),
+    scoreRecords,
+    teacherReviews,
+    selectedScoreRecordId,
     draftInputs: {
       ...defaultWorkbenchState.draftInputs,
       ...parsed.draftInputs,

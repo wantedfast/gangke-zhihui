@@ -1,14 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { defaultWorkbenchState, sampleTrainingTasks } from "@/lib/sample-data";
+import {
+  createExampleScoreRecord,
+  defaultWorkbenchState,
+  sampleTrainingTasks,
+} from "@/lib/sample-data";
 import { readWorkbenchState, writeWorkbenchState } from "@/lib/workbench-storage";
 import type {
   EditableRubricField,
   NavKey,
   Perspective,
   RubricDimension,
+  ScoreDimensionResult,
+  ScoreRecord,
   Student,
+  TeacherReview,
   TrainingTask,
   WorkbenchState,
 } from "@/types/workbench";
@@ -18,8 +25,8 @@ const navItems: Array<{ key: NavKey; label: string; helper: string }> = [
   { key: "ai-workbench", label: "AI 生成实训", helper: "课程资料与岗位标准" },
   { key: "rubric", label: "评分量规", helper: "教师编辑与本地发布" },
   { key: "submissions", label: "学生提交", helper: "后续切片接入" },
-  { key: "results", label: "评分结果", helper: "后续切片接入" },
-  { key: "class-dashboard", label: "班级看板", helper: "后续切片接入" },
+  { key: "results", label: "评分结果", helper: "AI 反馈与教师复核" },
+  { key: "class-dashboard", label: "班级看板", helper: "能力均值与薄弱项" },
 ];
 
 const navContent: Record<NavKey, { title: string; description: string }> = {
@@ -40,11 +47,13 @@ const navContent: Record<NavKey, { title: string; description: string }> = {
   },
   results: {
     title: "评分结果",
-    description: "当前任务只实现教师量规编辑与发布，这里保留后续接入口。",
+    description:
+      "学生提交后可触发 AI 或示例评分，教师可在同一模块复核五维分数并保存结果。",
   },
   "class-dashboard": {
     title: "班级能力看板",
-    description: "当前任务只实现教师量规编辑与发布，这里保留后续接入口。",
+    description:
+      "基于复核结果优先、AI 评分兜底的班级数据，展示完成状态、能力均值和薄弱项建议。",
   },
 };
 
@@ -132,11 +141,36 @@ function getDraftPublicationPatch(state: WorkbenchState) {
   };
 }
 
+function getScoreTotal(record: ScoreRecord, review: TeacherReview | null) {
+  return review?.totalScore ?? record.result.totalScore;
+}
+
+function readApiErrorMessage(value: unknown, fallback: string) {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "message" in value &&
+    typeof value.message === "string" &&
+    value.message.trim()
+  ) {
+    return value.message;
+  }
+
+  return fallback;
+}
+
 export default function Home() {
   const [state, setState] = useState<WorkbenchState>(defaultWorkbenchState);
   const [isReady, setIsReady] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState("");
+  const [isScoring, setIsScoring] = useState(false);
+  const [scoringError, setScoringError] = useState("");
+  const [reviewDraft, setReviewDraft] = useState<TeacherReview | null>(null);
 
   useEffect(() => {
     setState(readWorkbenchState());
@@ -175,6 +209,28 @@ export default function Home() {
       submission.studentId === state.selectedStudentId &&
       submission.taskLevel === selectedSubmissionTask?.level,
   );
+  const selectedScoreRecords = state.scoreRecords
+    .filter(
+      (record) =>
+        record.studentId === state.selectedStudentId &&
+        record.taskLevel === selectedSubmissionTask?.level,
+    )
+    .sort((a, b) => a.attemptNumber - b.attemptNumber);
+  const currentScoreRecord =
+    selectedScoreRecords[selectedScoreRecords.length - 1] ?? null;
+  const previousScoreRecord =
+    selectedScoreRecords.length > 1
+      ? selectedScoreRecords[selectedScoreRecords.length - 2]
+      : null;
+  const currentTeacherReview = currentScoreRecord
+    ? state.teacherReviews.find(
+        (review) => review.scoreRecordId === currentScoreRecord.id,
+      ) ?? null
+    : null;
+
+  useEffect(() => {
+    setReviewDraft(null);
+  }, [currentScoreRecord?.id]);
 
   function updateState(patch: Partial<WorkbenchState>) {
     setState((current) => ({ ...current, ...patch }));
@@ -230,6 +286,98 @@ export default function Home() {
       tasksPublished: false,
       publishedAt: null,
     }));
+  }
+
+  function loadFullDemoChain() {
+    const now = new Date().toISOString();
+    const demoStudents = state.students.length
+      ? state.students
+      : defaultWorkbenchState.students;
+    const firstStudent = demoStudents[0];
+    const secondStudent = demoStudents[1] ?? firstStudent;
+    const basicTask = sampleTrainingTasks[0];
+    const advancedTask = sampleTrainingTasks[1] ?? basicTask;
+    const firstSubmission = {
+      id: `${firstStudent.id}-${basicTask.level}-demo-submission`,
+      studentId: firstStudent.id,
+      taskLevel: basicTask.level,
+      content:
+        "第一版提交：完成岗位能力矩阵，补充模型接口调用伪代码，并说明数据脱敏和人工复核流程。",
+      submittedAt: now,
+    };
+    const secondSubmission = {
+      id: `${secondStudent.id}-${advancedTask.level}-demo-submission`,
+      studentId: secondStudent.id,
+      taskLevel: advancedTask.level,
+      content:
+        "进阶提交：设计校园问答助手流程，包含检索、模型调用、失败兜底和效果评估指标。",
+      submittedAt: now,
+    };
+    const firstScore = createExampleScoreRecord(
+      firstStudent,
+      basicTask,
+      firstSubmission,
+      1,
+    );
+    const secondScore = createExampleScoreRecord(
+      secondStudent,
+      advancedTask,
+      secondSubmission,
+      1,
+    );
+    const reviewDimensions = firstScore.result.dimensions.map((dimension) => ({
+      ...dimension,
+      score:
+        dimension.dimension === "岗位需求分析"
+          ? Math.max(0, dimension.score - 1)
+          : dimension.score,
+      deductionReason:
+        dimension.dimension === "岗位需求分析"
+          ? "教师复核：岗位证据链还可以继续补充。"
+          : dimension.deductionReason,
+      suggestion:
+        dimension.dimension === "岗位需求分析"
+          ? "补充 1-2 条岗位标准原文，并标注对应能力点。"
+          : dimension.suggestion,
+    }));
+    const teacherReview = {
+      id: `${firstScore.id}-teacher-review`,
+      scoreRecordId: firstScore.id,
+      studentId: firstStudent.id,
+      taskLevel: basicTask.level,
+      reviewedAt: now,
+      dimensions: reviewDimensions,
+      totalScore: reviewDimensions.reduce(
+        (sum, dimension) => sum + dimension.score,
+        0,
+      ),
+      summary:
+        "教师复核：整体达到发布标准，岗位需求分析还需补充更明确的岗位标准引用。",
+    };
+
+    setGenerationError("");
+    setScoringError("");
+    setReviewDraft(null);
+    setState({
+      ...defaultWorkbenchState,
+      perspective: "teacher",
+      activeNav: "class-dashboard",
+      sampleLoaded: true,
+      students: demoStudents,
+      selectedStudentId: firstStudent.id,
+      selectedSubmissionTaskLevel: basicTask.level,
+      trainingTasks: sampleTrainingTasks,
+      tasksPublished: true,
+      publishedAt: now,
+      studentSubmissions: [firstSubmission, secondSubmission],
+      scoreRecords: [firstScore, secondScore],
+      teacherReviews: [teacherReview],
+      selectedScoreRecordId: firstScore.id,
+      draftInputs: {
+        ...defaultWorkbenchState.draftInputs,
+        studentSubmission: firstSubmission.content,
+      },
+    });
   }
 
   function updateRubricField(
@@ -305,6 +453,86 @@ export default function Home() {
     });
   }
 
+  function appendScoreRecord(record: ScoreRecord) {
+    setState((current) => ({
+      ...current,
+      selectedScoreRecordId: record.id,
+      scoreRecords: [...current.scoreRecords, record],
+    }));
+  }
+
+  function nextAttemptNumber(studentId: string, taskLevel: TrainingTask["level"]) {
+    return (
+      state.scoreRecords.filter(
+        (record) => record.studentId === studentId && record.taskLevel === taskLevel,
+      ).length + 1
+    );
+  }
+
+  async function scoreSelectedSubmission() {
+    if (!selectedStudent || !selectedSubmissionTask || !selectedSubmission) {
+      setScoringError("请先保存学生提交内容，再进行评分。");
+      return;
+    }
+
+    setIsScoring(true);
+    setScoringError("");
+
+    try {
+      const response = await fetch("/api/score-submission", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          task: selectedSubmissionTask,
+          student: selectedStudent,
+          submissionContent: selectedSubmission.content,
+        }),
+      });
+      const payload = (await response.json()) as {
+        result?: ScoreRecord["result"];
+        error?: unknown;
+      };
+
+      if (!response.ok || !payload.result) {
+        throw new Error(readApiErrorMessage(payload.error, "AI 评分失败，请稍后重试。"));
+      }
+
+      appendScoreRecord({
+        id: `${selectedSubmission.id}-ai-score-${Date.now()}`,
+        studentId: selectedStudent.id,
+        taskLevel: selectedSubmissionTask.level,
+        submissionId: selectedSubmission.id,
+        submissionContent: selectedSubmission.content,
+        attemptNumber: nextAttemptNumber(selectedStudent.id, selectedSubmissionTask.level),
+        scoredAt: new Date().toISOString(),
+        source: "ai",
+        result: payload.result,
+      });
+    } catch (error) {
+      setScoringError(
+        error instanceof Error ? error.message : "AI 评分失败，请加载示例评分。",
+      );
+    } finally {
+      setIsScoring(false);
+    }
+  }
+
+  function loadExampleScore() {
+    if (!selectedStudent || !selectedSubmissionTask || !selectedSubmission) {
+      setScoringError("请先保存学生提交内容，再加载示例评分。");
+      return;
+    }
+
+    const record = createExampleScoreRecord(
+      selectedStudent,
+      selectedSubmissionTask,
+      selectedSubmission,
+      nextAttemptNumber(selectedStudent.id, selectedSubmissionTask.level),
+    );
+    setScoringError("");
+    appendScoreRecord(record);
+  }
+
   function selectSubmissionTask(taskLevel: TrainingTask["level"]) {
     setState((current) => {
       const savedSubmission = current.studentSubmissions.find(
@@ -324,6 +552,86 @@ export default function Home() {
         },
       };
     });
+  }
+
+  function createReviewDraft(record: ScoreRecord): TeacherReview {
+    const existingReview = state.teacherReviews.find(
+      (review) => review.scoreRecordId === record.id,
+    );
+    const dimensions = (existingReview?.dimensions ?? record.result.dimensions).map(
+      (dimension) => ({ ...dimension }),
+    );
+
+    return {
+      id: existingReview?.id ?? `${record.id}-teacher-review`,
+      scoreRecordId: record.id,
+      studentId: record.studentId,
+      taskLevel: record.taskLevel,
+      reviewedAt: existingReview?.reviewedAt ?? new Date().toISOString(),
+      dimensions,
+      totalScore: dimensions.reduce((sum, dimension) => sum + dimension.score, 0),
+      summary: existingReview?.summary ?? record.result.summary,
+    };
+  }
+
+  function updateReviewDimension(
+    dimensionName: RubricDimension,
+    patch: Partial<ScoreDimensionResult>,
+  ) {
+    setReviewDraft((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const dimensions = current.dimensions.map((dimension) => {
+        if (dimension.dimension !== dimensionName) {
+          return dimension;
+        }
+
+        const nextScore =
+          typeof patch.score === "number"
+            ? Math.max(0, Math.min(dimension.maxScore, Math.round(patch.score)))
+            : dimension.score;
+
+        return {
+          ...dimension,
+          ...patch,
+          score: nextScore,
+        };
+      });
+
+      return {
+        ...current,
+        dimensions,
+        totalScore: dimensions.reduce((sum, dimension) => sum + dimension.score, 0),
+      };
+    });
+  }
+
+  function saveTeacherReview() {
+    if (!reviewDraft) {
+      return;
+    }
+
+    const nextReview = {
+      ...reviewDraft,
+      reviewedAt: new Date().toISOString(),
+      totalScore: reviewDraft.dimensions.reduce(
+        (sum, dimension) => sum + dimension.score,
+        0,
+      ),
+    };
+
+    setState((current) => ({
+      ...current,
+      teacherReviews: [
+        ...current.teacherReviews.filter(
+          (review) => review.scoreRecordId !== nextReview.scoreRecordId,
+        ),
+        nextReview,
+      ],
+    }));
+    setReviewDraft(nextReview);
   }
 
   async function generateTrainingTasks() {
@@ -346,12 +654,12 @@ export default function Home() {
       });
       const payload = (await response.json()) as {
         tasks?: TrainingTask[];
-        error?: string;
+        error?: unknown;
       };
       const tasks = payload.tasks;
 
       if (!response.ok || !tasks) {
-        throw new Error(payload.error || "生成分层任务失败，请稍后重试。");
+        throw new Error(readApiErrorMessage(payload.error, "生成分层任务失败，请稍后重试。"));
       }
 
       setState((current) => ({
@@ -690,8 +998,483 @@ export default function Home() {
                 <pre>{selectedSubmission.content}</pre>
               </div>
             ) : null}
+
+            <div className="score-action-panel">
+              <div>
+                <p className="context-label">AI 评分</p>
+                <h4>{currentScoreRecord ? "已有评分结果" : "等待评分"}</h4>
+                <p>
+                  评分会读取当前已保存提交、任务说明和五维量规。未配置 DeepSeek 时，可加载示例评分继续演示。
+                </p>
+              </div>
+              <div className="generation-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={scoreSelectedSubmission}
+                  disabled={!selectedSubmission || isScoring}
+                >
+                  {isScoring ? "评分中..." : "AI 评分"}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={loadExampleScore}
+                  disabled={!selectedSubmission}
+                >
+                  加载示例评分
+                </button>
+              </div>
+            </div>
+
+            {scoringError ? (
+              <div className="error-box">
+                <p>{scoringError}</p>
+                <button type="button" onClick={loadExampleScore}>
+                  加载示例评分
+                </button>
+              </div>
+            ) : null}
+
+            {currentScoreRecord ? renderScoreResult(currentScoreRecord, previousScoreRecord) : null}
           </>
         )}
+      </section>
+    );
+  }
+
+  function getDimensionDelta(
+    current: ScoreDimensionResult,
+    previous: ScoreRecord | null,
+  ) {
+    const previousDimension = previous?.result.dimensions.find(
+      (dimension) => dimension.dimension === current.dimension,
+    );
+    return previousDimension ? current.score - previousDimension.score : null;
+  }
+
+  function renderScoreResult(record: ScoreRecord, previous: ScoreRecord | null) {
+    const totalDelta = previous
+      ? record.result.totalScore - previous.result.totalScore
+      : null;
+
+    return (
+      <article className="score-result-card">
+        <div className="score-result-header">
+          <div>
+            <p className="context-label">
+              {record.source === "ai" ? "AI 评分结果" : "示例评分结果"}
+            </p>
+            <h4>{record.result.totalScore} 分</h4>
+            <p>
+              第 {record.attemptNumber} 次评分 · {formatDateTime(record.scoredAt)}
+            </p>
+          </div>
+          {totalDelta !== null ? (
+            <span className={totalDelta >= 0 ? "delta-badge up" : "delta-badge down"}>
+              较上次 {totalDelta >= 0 ? "+" : ""}
+              {totalDelta} 分
+            </span>
+          ) : (
+            <span className="delta-badge">首次评分</span>
+          )}
+        </div>
+
+        <div className="score-dimension-grid">
+          {record.result.dimensions.map((dimension) => {
+            const previousDimension = previous?.result.dimensions.find(
+              (item) => item.dimension === dimension.dimension,
+            );
+            const delta = getDimensionDelta(dimension, previous);
+            return (
+              <section className="score-dimension-card" key={dimension.dimension}>
+                <div className="score-dimension-title">
+                  <strong>{dimension.dimension}</strong>
+                  <span>
+                    {dimension.score}/{dimension.maxScore}
+                    {delta !== null ? `（${delta >= 0 ? "+" : ""}${delta}）` : ""}
+                  </span>
+                </div>
+                <p>
+                  <b>扣分原因：</b>
+                  {dimension.deductionReason}
+                </p>
+                <p>
+                  <b>改进建议：</b>
+                  {dimension.suggestion}
+                </p>
+                {previousDimension &&
+                (previousDimension.deductionReason !== dimension.deductionReason ||
+                  previousDimension.suggestion !== dimension.suggestion) ? (
+                  <div className="score-change-note">
+                    <span>上次反馈</span>
+                    <p>{previousDimension.deductionReason}</p>
+                    <p>{previousDimension.suggestion}</p>
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
+        </div>
+
+        {previous && previous.result.summary !== record.result.summary ? (
+          <div className="score-change-note wide">
+            <span>上次总评</span>
+            <p>{previous.result.summary}</p>
+          </div>
+        ) : null}
+
+        <div className="score-summary">
+          <strong>总评</strong>
+          <p>{record.result.summary}</p>
+        </div>
+      </article>
+    );
+  }
+
+  function renderTeacherReviewPanel(record: ScoreRecord) {
+    const activeReviewDraft = reviewDraft;
+    const savedReview = currentTeacherReview;
+    const displayReview = activeReviewDraft ?? savedReview;
+
+    return (
+      <article className="score-result-card teacher-review-panel">
+        <div className="score-result-header">
+          <div>
+            <p className="context-label">教师复核</p>
+            <h4>{displayReview ? `${displayReview.totalScore} 分` : "待复核"}</h4>
+            <p>
+              {savedReview
+                ? `已保存 · ${formatDateTime(savedReview.reviewedAt)}`
+                : "基于当前 AI / 示例评分进行人工确认"}
+            </p>
+          </div>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => setReviewDraft(createReviewDraft(record))}
+          >
+            {savedReview ? "继续复核" : "开始复核"}
+          </button>
+        </div>
+
+        <div className="review-context-grid">
+          <div>
+            <span>学生</span>
+            <strong>{selectedStudent?.name ?? record.studentId}</strong>
+            <p>{selectedStudent?.group ?? "未匹配班级"}</p>
+          </div>
+          <div>
+            <span>任务</span>
+            <strong>{selectedSubmissionTask?.title ?? record.taskLevel}</strong>
+            <p>{record.taskLevel}</p>
+          </div>
+          <div>
+            <span>提交内容</span>
+            <p>{record.submissionContent}</p>
+          </div>
+        </div>
+
+        {activeReviewDraft ? (
+          <>
+            <div className="review-editor-grid">
+              {activeReviewDraft.dimensions.map((dimension) => (
+                <section className="review-dimension-editor" key={dimension.dimension}>
+                  <label>
+                    <span>{dimension.dimension}</span>
+                    <input
+                      max={dimension.maxScore}
+                      min={0}
+                      onChange={(event) =>
+                        updateReviewDimension(dimension.dimension, {
+                          score: Number(event.target.value),
+                        })
+                      }
+                      type="number"
+                      value={dimension.score}
+                    />
+                    <small>/{dimension.maxScore}</small>
+                  </label>
+                  <textarea
+                    onChange={(event) =>
+                      updateReviewDimension(dimension.dimension, {
+                        deductionReason: event.target.value,
+                      })
+                    }
+                    rows={3}
+                    value={dimension.deductionReason}
+                  />
+                  <textarea
+                    onChange={(event) =>
+                      updateReviewDimension(dimension.dimension, {
+                        suggestion: event.target.value,
+                      })
+                    }
+                    rows={3}
+                    value={dimension.suggestion}
+                  />
+                </section>
+              ))}
+            </div>
+
+            <label className="review-summary-editor">
+              <span>教师总评</span>
+              <textarea
+                onChange={(event) =>
+                  setReviewDraft((current) =>
+                    current ? { ...current, summary: event.target.value } : current,
+                  )
+                }
+                rows={4}
+                value={activeReviewDraft.summary}
+              />
+            </label>
+
+            <div className="inline-actions">
+              <button className="primary-button" onClick={saveTeacherReview} type="button">
+                保存复核
+              </button>
+              <button
+                className="secondary-button"
+                onClick={() => setReviewDraft(null)}
+                type="button"
+              >
+                取消
+              </button>
+            </div>
+          </>
+        ) : savedReview ? (
+          <div className="review-saved-grid">
+            {savedReview.dimensions.map((dimension) => (
+              <div key={dimension.dimension}>
+                <span>{dimension.dimension}</span>
+                <strong>
+                  {dimension.score}/{dimension.maxScore}
+                </strong>
+                <p>{dimension.deductionReason}</p>
+                <p>{dimension.suggestion}</p>
+              </div>
+            ))}
+            <div className="score-summary">
+              <strong>教师总评</strong>
+              <p>{savedReview.summary}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="muted-note">
+            复核保存后会写入 localStorage，并作为后续班级看板的数据源。
+          </p>
+        )}
+      </article>
+    );
+  }
+
+  function renderScoreResultsPage() {
+    if (!currentScoreRecord) {
+      return (
+        <section className="glass-panel task-panel placeholder-panel">
+          <div className="section-title">
+            <h3>评分结果</h3>
+            <span>等待学生评分</span>
+          </div>
+          <p>当前学生和任务还没有评分记录。请先在学生提交页保存作业并触发 AI 评分，或加载示例评分。</p>
+        </section>
+      );
+    }
+
+    return (
+      <section className="glass-panel task-panel student-submission-panel">
+        <div className="section-title">
+          <h3>评分结果</h3>
+          <span>{selectedStudent?.name ?? "当前学生"} · {selectedSubmissionTask?.level ?? "任务"}</span>
+        </div>
+        {renderScoreResult(currentScoreRecord, previousScoreRecord)}
+        {isTeacher ? renderTeacherReviewPanel(currentScoreRecord) : null}
+      </section>
+    );
+  }
+
+  function renderClassDashboard() {
+    const reviewedByScoreId = new Map(
+      state.teacherReviews.map((review) => [review.scoreRecordId, review]),
+    );
+    const latestRecordByStudentTask = new Map<string, ScoreRecord>();
+    const submissionByStudentTask = new Map(
+      state.studentSubmissions.map((submission) => [
+        `${submission.studentId}:${submission.taskLevel}`,
+        submission,
+      ]),
+    );
+
+    state.scoreRecords.forEach((record) => {
+      const key = `${record.studentId}:${record.taskLevel}`;
+      const current = latestRecordByStudentTask.get(key);
+      if (!current || record.attemptNumber > current.attemptNumber) {
+        latestRecordByStudentTask.set(key, record);
+      }
+    });
+
+    const rows = state.students.flatMap((student) =>
+      state.trainingTasks.map((task) => {
+        const record = latestRecordByStudentTask.get(`${student.id}:${task.level}`) ?? null;
+        const review = record ? reviewedByScoreId.get(record.id) ?? null : null;
+        const submission = submissionByStudentTask.get(`${student.id}:${task.level}`) ?? null;
+        return {
+          student,
+          task,
+          submission,
+          record,
+          review,
+          status: review
+            ? "已复核"
+            : record
+              ? "已评分"
+              : submission
+                ? "已提交待评分"
+                : "未提交",
+        };
+      }),
+    );
+    const scoredRows = rows.filter((row) => row.record);
+    const reviewedRows = rows.filter((row) => row.review);
+    const dimensionAverages = RUBRIC_DIMENSIONS.map(({ dimension, score }) => {
+      const values = scoredRows.flatMap((row) => {
+        const reviewDimension = row.review?.dimensions.find(
+          (item) => item.dimension === dimension,
+        );
+        const scoreDimension = row.record?.result.dimensions.find(
+          (item) => item.dimension === dimension,
+        );
+        const source = reviewDimension ?? scoreDimension;
+        return source ? [source.score] : [];
+      });
+      const average =
+        values.length > 0
+          ? values.reduce((sum, value) => sum + value, 0) / values.length
+          : 0;
+
+      return {
+        dimension,
+        maxScore: score,
+        average,
+        percent: score > 0 ? Math.round((average / score) * 100) : 0,
+      };
+    });
+    const weakestDimension = [...dimensionAverages].sort(
+      (a, b) => a.percent - b.percent,
+    )[0];
+    const classAverage =
+      scoredRows.length > 0
+        ? Math.round(
+            scoredRows.reduce((sum, row) => {
+              const review = row.record ? reviewedByScoreId.get(row.record.id) ?? null : null;
+              return sum + (row.record ? getScoreTotal(row.record, review) : 0);
+            }, 0) / scoredRows.length,
+          )
+        : 0;
+
+    return (
+      <section className="glass-panel task-panel class-dashboard-panel">
+        <div className="section-title">
+          <h3>班级能力看板</h3>
+          <span>复核优先 · AI 兜底</span>
+        </div>
+
+        <div className="dashboard-metrics">
+          <div>
+            <span>班级平均分</span>
+            <strong>{classAverage || "未评分"}</strong>
+          </div>
+          <div>
+            <span>已评分任务</span>
+            <strong>
+              {scoredRows.length}/{rows.length}
+            </strong>
+          </div>
+          <div>
+            <span>已复核任务</span>
+            <strong>
+              {reviewedRows.length}/{scoredRows.length || 0}
+            </strong>
+          </div>
+        </div>
+
+        <div className="dashboard-grid">
+          <article className="score-result-card">
+            <div className="section-title compact">
+              <h4>五维能力均值</h4>
+              <span>{scoredRows.length ? "基于已评分记录" : "等待评分数据"}</span>
+            </div>
+            <div className="ability-bars">
+              {dimensionAverages.map((item) => (
+                <div className="ability-row" key={item.dimension}>
+                  <div>
+                    <strong>{item.dimension}</strong>
+                    <span>
+                      {item.average.toFixed(1)}/{item.maxScore}
+                    </span>
+                  </div>
+                  <div className="ability-track">
+                    <span style={{ width: `${Math.min(100, item.percent)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="score-result-card">
+            <div className="section-title compact">
+              <h4>薄弱项分析</h4>
+              <span>{weakestDimension?.dimension ?? "暂无数据"}</span>
+            </div>
+            <p className="dashboard-advice">
+              {weakestDimension && scoredRows.length
+                ? `${weakestDimension.dimension} 当前达成度 ${weakestDimension.percent}%，建议下一轮实训增加示例拆解、同伴互评和教师示范修订。`
+                : "班级还没有评分记录，完成学生提交与评分后自动生成薄弱项建议。"}
+            </p>
+          </article>
+        </div>
+
+        <div className="dashboard-table-wrap">
+          <table className="dashboard-table">
+            <thead>
+              <tr>
+                <th>学生</th>
+                <th>任务</th>
+                <th>状态</th>
+                <th>AI / 示例分</th>
+                <th>复核分</th>
+                <th>完成情况</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={`${row.student.id}-${row.task.level}`}>
+                  <td>
+                    <strong>{row.student.name}</strong>
+                    <span>{row.student.group}</span>
+                  </td>
+                  <td>
+                    <strong>{row.task.level}</strong>
+                    <span>{row.task.title}</span>
+                  </td>
+                  <td>{row.status}</td>
+                  <td>{row.record ? `${row.record.result.totalScore} 分` : "-"}</td>
+                  <td>{row.review ? `${row.review.totalScore} 分` : "-"}</td>
+                  <td>
+                    {row.review
+                      ? "复核完成"
+                      : row.record
+                        ? `第 ${row.record.attemptNumber} 次评分`
+                        : row.submission
+                          ? "待评分"
+                          : "待提交"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     );
   }
@@ -740,6 +1523,9 @@ export default function Home() {
 
         <button className="reset-button" type="button" onClick={resetSampleData}>
           重置本地示例
+        </button>
+        <button className="reset-button" type="button" onClick={loadFullDemoChain}>
+          载入完整演示
         </button>
       </aside>
 
@@ -874,7 +1660,11 @@ export default function Home() {
             ? renderTaskOverview()
             : state.activeNav === "submissions"
               ? renderStudentSubmission()
-            : renderPlaceholder()}
+              : state.activeNav === "results"
+                ? renderScoreResultsPage()
+                : state.activeNav === "class-dashboard"
+                  ? renderClassDashboard()
+                  : renderPlaceholder()}
       </section>
     </main>
   );
