@@ -1,52 +1,57 @@
-# 岗课智评 MVP
+# Gangke Zhihui MVP
 
-面向 `XA-202603｜科大讯飞｜面向职业教育高水平专业群建设的教学实训与岗位技能智能体开发` 的职业教育 AI 实训评分原型。
+An AI-assisted vocational training assessment MVP for `XA-202603 | iFlytek | Teaching Practice and Job Skill Agent Development for High-Level Vocational Specialty Groups`.
 
-当前 MVP 已完成本地闭环：教师生成/加载任务 -> 编辑并发布量规 -> 学生提交文本 + 代码 -> AI/示例评分 -> 学生查看反馈与重提交对比 -> 教师复核 -> 班级能力看板。数据保存于浏览器 `localStorage`，未接入数据库、登录、文件上传或代码执行。
+The current demo completes a local closed loop:
 
-## 已完成范围
+Teacher task generation or sample loading -> rubric editing and publishing -> student mixed text/code submission -> AI or example scoring -> student feedback and resubmission comparison -> teacher review -> class ability dashboard.
 
-- Task 1：工作台骨架、教师/学生视角、五项导航、本地状态保存。
-- Task 2：教师输入课程资料和岗位标准，生成三层实训任务；无 DeepSeek Key 时可加载示例任务。
-- Task 3：教师编辑三个任务的五维评分量规，并发布到本地状态。
-- Task 4：学生身份选择、历史平均分推荐、查看已发布任务、文本 + 代码混合提交、学术诚信提示、本地保存提交。
-- Task 5：`/api/score-submission` 服务端评分代理、示例评分兜底、学生端评分反馈、重新提交前后对比。
-- Task 6：教师查看提交和 AI/示例评分，修改五维分、扣分原因、改进建议和总评，保存复核结果。
-- Task 7：班级看板展示学生任务状态、AI/示例分、复核分、五维能力均值、薄弱项分析和教学建议。
-- Task 8：DeepSeek 环境变量示例、统一 API 错误结构、完整示例链路按钮、最终端到端验证。
+Data is stored in browser `localStorage`. The MVP does not include database storage, real login, file upload, or code execution.
 
-## 技术栈
+## Completed Scope
+
+- Task 1: Workbench shell, teacher/student views, five navigation modules, and local state persistence.
+- Task 2: Generate three-level training tasks from course material and job standards, with sample-task fallback when no DeepSeek key is configured.
+- Task 3: Edit and publish five-dimension rubrics for all three tasks.
+- Task 4: Select real student identity, recommend task level by historical average, view published tasks, submit mixed text/code content, show academic integrity notice, and persist submissions locally.
+- Task 5: Server-side scoring proxy at `/api/score-submission`, example scoring fallback, student scoring feedback, and resubmission comparison.
+- Task 6: Teacher review for submitted work and AI/example scoring, including editable dimension scores, deduction reasons, suggestions, and summary.
+- Task 7: Class dashboard with student completion status, AI/example score, teacher review score, five-dimension class averages, weak-dimension analysis, and teaching advice.
+- Task 8: DeepSeek environment example, structured API errors, complete demo-chain loading, and end-to-end validation.
+- Audit fix pass: downstream state reset on task replacement, hardened `localStorage` normalization, scored-submission selection for teacher review, real lint guard, and stale placeholder copy removal.
+
+## Tech Stack
 
 - Next.js 16
 - React 19
 - TypeScript 6
 - pnpm
 
-## 本地运行
+## Local Development
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-打开：
+Open:
 
 ```text
 http://localhost:3000
 ```
 
-构建验证：
+Validation:
 
 ```bash
 pnpm run build
 pnpm run lint
 ```
 
-注意：当前 `lint` 脚本暂时映射为 `next build`，还没有单独配置 ESLint。
+`pnpm run lint` runs `scripts/lint.mjs`. It is a lightweight project guard that checks the lint script is not aliased to `next build`, prevents client/shared DeepSeek config leakage, blocks stale placeholder copy, and catches console debugging statements.
 
-## DeepSeek 配置
+## DeepSeek Configuration
 
-复制 `.env.example` 为 `.env.local`，按需填写：
+Copy `.env.example` to `.env.local` and fill values as needed:
 
 ```bash
 DEEPSEEK_API_KEY=your_deepseek_api_key_here
@@ -54,41 +59,42 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com/chat/completions
 DEEPSEEK_MODEL=deepseek-v4-flash
 ```
 
-未配置 `DEEPSEEK_API_KEY` 时，AI 生成和 AI 评分 API 会返回结构化错误；页面仍可通过“加载示例任务”“加载示例评分”或“载入完整演示”完成演示。
+Without `DEEPSEEK_API_KEY`, AI generation and AI scoring APIs return structured errors. The UI can still complete the full demo through sample tasks, example scoring, or the complete demo-chain loader.
 
-## 演示路径
+## Demo Path
 
-最快演示：
+Fastest demo:
 
-1. 打开页面。
-2. 点击顶部“载入完整演示”。
-3. 查看“班级看板”，确认已有任务、提交、评分、复核和能力分析。
+1. Open the app.
+2. Click "载入完整演示".
+3. Open "班级看板" and confirm tasks, submissions, scores, teacher review, and ability analysis are present.
 
-完整手动路径：
+Manual demo:
 
-1. 教师端进入“AI 生成实训”，生成或加载三道分层任务。
-2. 进入“评分量规”，编辑五个固定维度并点击“发布全部任务”。
-3. 切换学生端，进入“学生提交”。
-4. 选择学生身份，系统按历史平均分推荐任务：`<70` 基础，`70-85` 进阶，`>85` 挑战。
-5. 学生勾选学术诚信提示，提交文本 + 代码混合内容。
-6. 点击 AI 评分；无 Key 或 API 失败时点击“加载示例评分”。
-7. 学生修改后重新提交，查看总分、维度分和反馈文本对比。
-8. 切回教师端，在“评分结果”里复核五维分数、扣分原因、改进建议和总评。
-9. 进入“班级看板”，查看学生完成状态、复核优先的成绩列表、五维均值、薄弱项和教学建议。
+1. Teacher view: open "AI 生成实训" and generate or load three leveled tasks.
+2. Open "评分量规", edit the five fixed dimensions, and publish all tasks.
+3. Switch to student view and open "学生提交".
+4. Select a student. The app recommends a task level by historical average: `<70` basic, `70-85` advanced, `>85` challenge.
+5. Accept the academic integrity notice and submit mixed text/code content.
+6. Run AI scoring, or load example scoring when no key/API is available.
+7. Resubmit and compare total score, dimension scores, and feedback text.
+8. Switch back to teacher view and open "评分结果" to select a scored submission and review dimension scores, deduction reasons, suggestions, and summary.
+9. Open "班级看板" to view completion state, review-prioritized scores, five-dimension averages, weak dimensions, and teaching advice.
 
-## 项目文档
+## Project Documents
 
-- PRD：[outputs/gangke-zhihui-prd.md](outputs/gangke-zhihui-prd.md)
-- 任务拆解：[outputs/gangke-zhihui-issues.md](outputs/gangke-zhihui-issues.md)
-- 交付状态：[outputs/task8-delivery-status.md](outputs/task8-delivery-status.md)
+- PRD: [outputs/gangke-zhihui-prd.md](outputs/gangke-zhihui-prd.md)
+- Issue breakdown: [outputs/gangke-zhihui-issues.md](outputs/gangke-zhihui-issues.md)
+- Task 8 delivery status: [outputs/task8-delivery-status.md](outputs/task8-delivery-status.md)
+- Audit fix requirements: [outputs/audit-fix-requirements.md](outputs/audit-fix-requirements.md)
 
-## 验收截图
+## Acceptance Screenshots
 
-- Task 1：[outputs/task1-workbench.png](outputs/task1-workbench.png)
-- Task 2：[outputs/task2-generated-tasks.png](outputs/task2-generated-tasks.png)
-- Task 3：[outputs/task3-rubric-publish.png](outputs/task3-rubric-publish.png)
-- Task 4：[outputs/task4-student-submission.png](outputs/task4-student-submission.png)
-- Task 5：[outputs/task5-ai-feedback.png](outputs/task5-ai-feedback.png)
-- Task 6：[outputs/task6-teacher-review.png](outputs/task6-teacher-review.png)
-- Task 7：[outputs/task7-class-dashboard.png](outputs/task7-class-dashboard.png)
-- Task 8：[outputs/task8-end-to-end.png](outputs/task8-end-to-end.png)
+- Task 1: [outputs/task1-workbench.png](outputs/task1-workbench.png)
+- Task 2: [outputs/task2-generated-tasks.png](outputs/task2-generated-tasks.png)
+- Task 3: [outputs/task3-rubric-publish.png](outputs/task3-rubric-publish.png)
+- Task 4: [outputs/task4-student-submission.png](outputs/task4-student-submission.png)
+- Task 5: [outputs/task5-ai-feedback.png](outputs/task5-ai-feedback.png)
+- Task 6: [outputs/task6-teacher-review.png](outputs/task6-teacher-review.png)
+- Task 7: [outputs/task7-class-dashboard.png](outputs/task7-class-dashboard.png)
+- Task 8: [outputs/task8-end-to-end.png](outputs/task8-end-to-end.png)

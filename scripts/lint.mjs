@@ -55,7 +55,7 @@ for (const file of files) {
     fail(file, "DeepSeek server config must stay out of client/shared code");
   }
 
-  if (/后续切片接入/.test(content)) {
+  if (/后续切片接入|当前切片未实现|当前交付尚未覆盖/.test(content)) {
     fail(file, "stale placeholder copy remains");
   }
 

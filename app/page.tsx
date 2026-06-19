@@ -234,11 +234,18 @@ export default function Home() {
         record.taskLevel === selectedSubmissionTask?.level,
     )
     .sort((a, b) => a.attemptNumber - b.attemptNumber);
+  const selectedScoreRecord =
+    selectedScoreRecords.find(
+      (record) => record.id === state.selectedScoreRecordId,
+    ) ?? null;
   const currentScoreRecord =
-    selectedScoreRecords[selectedScoreRecords.length - 1] ?? null;
+    selectedScoreRecord ?? selectedScoreRecords[selectedScoreRecords.length - 1] ?? null;
+  const currentScoreRecordIndex = currentScoreRecord
+    ? selectedScoreRecords.findIndex((record) => record.id === currentScoreRecord.id)
+    : -1;
   const previousScoreRecord =
-    selectedScoreRecords.length > 1
-      ? selectedScoreRecords[selectedScoreRecords.length - 2]
+    currentScoreRecordIndex > 0
+      ? selectedScoreRecords[currentScoreRecordIndex - 1]
       : null;
   const currentTeacherReview = currentScoreRecord
     ? state.teacherReviews.find(
@@ -1567,10 +1574,10 @@ export default function Home() {
       <section className="glass-panel task-panel placeholder-panel">
         <div className="section-title">
           <h3>{activeContent.title}</h3>
-          <span>当前切片未实现</span>
+          <span>模块状态</span>
         </div>
         <p>
-          当前交付尚未覆盖评分结果和班级看板，不引入额外接口或状态。
+          请选择左侧已开放模块继续操作。
         </p>
       </section>
     );
