@@ -85,12 +85,13 @@ function normalizeScore(value: unknown): ScoreResult | null {
   }
 
   const rawDimensions = rawScore.dimensions;
-  const dimensions = RUBRIC_DIMENSIONS.map(({ dimension }) => {
+  const dimensions = RUBRIC_DIMENSIONS.map(({ dimension }, index) => {
     const matched = rawDimensions.find(
       (item) =>
-        normalizeRubricDimension(isRecord(item) ? item.dimension : undefined) ===
-        dimension,
-    );
+        normalizeRubricDimension(
+          isRecord(item) ? (item.dimension ?? item.name) : undefined,
+        ) === dimension,
+    ) ?? rawDimensions[index];
     return normalizeDimensionResult(matched, dimension);
   });
 
