@@ -10,6 +10,7 @@ services:
     env_file:
       - .env.production
     environment:
+      NEXT_PUBLIC_BASE_PATH: /gangke-zhihui
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
