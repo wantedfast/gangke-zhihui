@@ -1,0 +1,17 @@
+services:
+  gangke-zhihui:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_BASE_PATH: /gangke-zhihui
+    image: gangke-zhihui:latest
+    container_name: gangke-zhihui
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "127.0.0.1:3012:3000"
