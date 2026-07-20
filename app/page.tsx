@@ -19,6 +19,12 @@ import type {
   TrainingTask,
   WorkbenchState,
 } from "@/types/workbench";
+
+const APP_BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/+$/, "");
+
+function appApiPath(path: string) {
+  return `${APP_BASE_PATH}${path}`;
+}
 import { RUBRIC_DIMENSIONS, TASK_LEVELS } from "@/types/workbench";
 
 const navItems: Array<{ key: NavKey; label: string; helper: string }> = [
@@ -501,7 +507,7 @@ export default function Home() {
     setScoringError("");
 
     try {
-      const response = await fetch("/api/score-submission", {
+      const response = await fetch(appApiPath("/api/score-submission"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -678,7 +684,7 @@ export default function Home() {
     setGenerationError("");
 
     try {
-      const response = await fetch("/api/generate-training-tasks", {
+      const response = await fetch(appApiPath("/api/generate-training-tasks"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ courseMaterial, jobStandard }),
